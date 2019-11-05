@@ -1,18 +1,10 @@
 use glow::*;
 
-#[cfg(all(target_arch = "wasm32", feature = "web-sys"))]
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-#[cfg(all(target_arch = "wasm32", feature = "stdweb"))]
-use std_web::{
-    traits::*,
-    unstable::TryInto,
-    web::{document, html_element::*},
-};
-#[cfg(all(target_arch = "wasm32", feature = "stdweb"))]
-use webgl_stdweb::WebGL2RenderingContext;
 
-#[cfg_attr(all(target_arch = "wasm32", feature = "web-sys"), wasm_bindgen(start))]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
 pub fn wasm_main() {
     main();
 }
@@ -20,7 +12,7 @@ pub fn wasm_main() {
 fn main() {
     unsafe {
         // Create a context from a WebGL2 context on wasm32 targets
-        #[cfg(all(target_arch = "wasm32", feature = "web-sys"))]
+        #[cfg(target_arch = "wasm32")]
         let (_window, gl, _events_loop, render_loop, shader_version) = {
             use wasm_bindgen::JsCast;
             let canvas = web_sys::window()
@@ -46,33 +38,8 @@ fn main() {
             )
         };
 
-        #[cfg(all(target_arch = "wasm32", feature = "stdweb"))]
-        let (_window, gl, _events_loop, render_loop, shader_version) = {
-            let canvas: CanvasElement = document()
-                .create_element("canvas")
-                .unwrap()
-                .try_into()
-                .unwrap();
-            document()
-                .body()
-                .unwrap()
-                .append_child(&canvas);
-            canvas.set_width(640);
-            canvas.set_height(480);
-            let webgl2_context: WebGL2RenderingContext = canvas
-                .get_context()
-                .unwrap();
-            (
-                (),
-                glow::Context::from_webgl2_context(webgl2_context),
-                (),
-                glow::RenderLoop::from_request_animation_frame(),
-                "#version 300 es",
-            )
-        };
-
         // Create a context from a glutin window on non-wasm32 targets
-        #[cfg(feature = "window-glutin")]
+        #[cfg(not(target_arch = "wasm32"))]
         let (gl, event_loop, windowed_context, shader_version) = {
             let el = glutin::event_loop::EventLoop::new();
             let wb = glutin::window::WindowBuilder::new()
@@ -87,29 +54,6 @@ fn main() {
                 windowed_context.get_proc_address(s) as *const _
             });
             (context, el, windowed_context, "#version 410")
-        };
-
-        // Create a context from a sdl2 window
-        #[cfg(feature = "window-sdl2")]
-        let (gl, mut events_loop, render_loop, shader_version, _gl_context) = {
-            let sdl = sdl2::init().unwrap();
-            let video = sdl.video().unwrap();
-            let gl_attr = video.gl_attr();
-            gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
-            gl_attr.set_context_version(3, 0);
-
-            let window = video
-                .window("Hello triangle!", 1024, 769)
-                .opengl()
-                .resizable()
-                .build()
-                .unwrap();
-            let gl_context = window.gl_create_context().unwrap();
-            let context =
-                glow::Context::from_loader_function(|s| video.gl_get_proc_address(s) as *const _);
-            let render_loop = glow::RenderLoop::<sdl2::video::Window>::from_sdl_window(window);
-            let event_loop = sdl.event_pump().unwrap();
-            (context, event_loop, render_loop, "#version 410", gl_context)
         };
 
         let vertex_array = gl
@@ -173,7 +117,7 @@ fn main() {
 
         // We handle events very differently between targets
 
-        #[cfg(feature = "window-glutin")]
+        #[cfg(not(target_arch = "wasm32"))]
         {
             use glutin::event::{Event, WindowEvent};
             use glutin::event_loop::ControlFlow;
@@ -214,17 +158,8 @@ fn main() {
             });
         }
 
-        #[cfg(not(feature = "window-glutin"))]
+        #[cfg(target_arch = "wasm32")]
         render_loop.run(move |running: &mut bool| {
-            #[cfg(feature = "window-sdl2")]
-            {
-                for event in events_loop.poll_iter() {
-                    match event {
-                        sdl2::event::Event::Quit { .. } => *running = false,
-                        _ => {}
-                    }
-                }
-            }
 
             gl.clear(glow::COLOR_BUFFER_BIT);
             gl.draw_arrays(glow::TRIANGLES, 0, 3);
